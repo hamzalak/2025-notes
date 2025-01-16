@@ -1,0 +1,170 @@
+# Directory Structure
+ansible-angular-deploy/
+├── inventory/
+│   ├── production
+│   └── staging
+├── group_vars/
+│   ├── all.yml
+│   ├── production.yml
+│   └── staging.yml
+├── roles/
+│   ├── apache/
+│   │   ├── tasks/
+│   │   │   └── main.yml      # Apache installation and configuration
+│   │   ├── templates/
+│   │   │   └── vhost.conf.j2 # Apache virtual host template
+│   │   └── vars/
+│   │       └── main.yml      # Apache-specific variables
+│   └── deploy/
+│       ├── tasks/
+│       │   └── main.yml      # Application deployment tasks
+│       └── vars/
+│           └── main.yml      # Deployment variables
+├── site.yml                  # Main playbook
+└── ansible.cfg              # Ansible configuration
+
+# inventory/production
+[webservers]
+web01 ansible_host=192.168.1.10
+
+# group_vars/all.yml
+---
+# Common variables for all environments
+apache_user: www-data
+apache_group: www-data
+apps_root: /var/www
+app_name: myangularapp
+domain_name: myapp.example.com
+
+# Project-specific settings
+app_root: "{{ apps_root }}/{{ app_name }}"
+app_html_root: "{{ app_root }}/html"
+app_logs_root: "{{ app_root }}/logs"
+app_conf_root: "{{ app_root }}/conf"
+
+# Apache settings
+apache_conf_path: /etc/apache2
+apache_sites_available: "{{ apache_conf_path }}/sites-available"
+apache_sites_enabled: "{{ apache_conf_path }}/sites-enabled"
+
+# group_vars/production.yml
+---
+environment: production
+apache_port: 80
+ssl_enabled: true
+
+# roles/apache/vars/main.yml
+---
+apache_packages:
+  - apache2
+  - libapache2-mod-security2
+apache_modules:
+  - rewrite
+  - ssl
+  - headers
+  - proxy
+  - proxy_http
+
+# roles/apache/tasks/main.yml
+---
+# Install Apache
+- name: Install Apache packages
+  apt:
+    name: "{{ apache_packages }}"
+    state: present
+    update_cache: yes
+
+# Enable required Apache modules
+- name: Enable Apache modules
+  apache2_module:
+    name: "{{ item }}"
+    state: present
+  with_items: "{{ apache_modules }}"
+
+# Create directory structure
+- name: Create application directories
+  file:
+    path: "{{ item }}"
+    state: directory
+    owner: "{{ apache_user }}"
+    group: "{{ apache_group }}"
+    mode: '0755'
+  with_items:
+    - "{{ app_root }}"
+    - "{{ app_html_root }}"
+    - "{{ app_logs_root }}"
+    - "{{ app_conf_root }}"
+
+# Configure virtual host
+- name: Configure Apache virtual host
+  template:
+    src: vhost.conf.j2
+    dest: "{{ apache_sites_available }}/{{ app_name }}.conf"
+    owner: root
+    group: root
+    mode: '0644'
+
+# Enable site
+- name: Enable virtual host
+  file:
+    src: "{{ apache_sites_available }}/{{ app_name }}.conf"
+    dest: "{{ apache_sites_enabled }}/{{ app_name }}.conf"
+    state: link
+
+# roles/deploy/tasks/main.yml
+---
+# Deploy application
+- name: Copy Angular application files
+  copy:
+    src: "{{ angular_dist_path }}"
+    dest: "{{ app_html_root }}"
+    owner: "{{ apache_user }}"
+    group: "{{ apache_group }}"
+    mode: '0644'
+
+# Verify deployment
+- name: Check Apache configuration
+  command: apache2ctl -t
+  register: apache_check
+
+- name: Restart Apache if configuration is valid
+  service:
+    name: apache2
+    state: restarted
+  when: apache_check.rc == 0
+
+# site.yml
+---
+- name: Deploy Angular Application
+  hosts: webservers
+  become: yes
+  roles:
+    - apache
+    - deploy
+
+# templates/vhost.conf.j2
+<VirtualHost *:{{ apache_port }}>
+    ServerName {{ domain_name }}
+    DocumentRoot {{ app_html_root }}
+
+    ErrorLog {{ app_logs_root }}/error.log
+    CustomLog {{ app_logs_root }}/access.log combined
+
+    <Directory {{ app_html_root }}>
+        Options -Indexes +FollowSymLinks
+        AllowOverride All
+        Require all granted
+
+        # Handle Angular routing
+        RewriteEngine On
+        RewriteCond %{REQUEST_FILENAME} -s [OR]
+        RewriteCond %{REQUEST_FILENAME} -l [OR]
+        RewriteCond %{REQUEST_FILENAME} -d
+        RewriteRule ^.*$ - [NC,L]
+        RewriteRule ^(.*) /index.html [NC,L]
+    </Directory>
+
+    # Security headers
+    Header always set X-Frame-Options "SAMEORIGIN"
+    Header always set X-XSS-Protection "1; mode=block"
+    Header always set X-Content-Type-Options "nosniff"
