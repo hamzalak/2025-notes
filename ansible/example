@@ -32,6 +32,7 @@ web01 ansible_host=192.168.1.10
 # Common variables for all environments
 apache_user: www-data
 apache_group: www-data
+#different app apps_root: /var/www/team2
 apps_root: /var/www
 app_name: myangularapp
 domain_name: myapp.example.com
