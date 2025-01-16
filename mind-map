@@ -24,3 +24,11 @@
 
 --- Hard Setup Ansible we need to deploy each application separately on the same server without modifying the configuration 
  
+
+Note : env location 
+
+/var/www/team1/app1/conf/environments/
+                                ├── .env.production
+                                └── .env.staging
+
+
