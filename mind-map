@@ -32,3 +32,30 @@ Note : env location
                                 └── .env.staging
 
 
+//////////////////////////////////////// Apache structure ////////////////////////////////////////////
+
+/etc/apache2/
+├── apache2.conf                # Main Apache configuration file
+├── ports.conf                  # Defines ports Apache listens on
+├── sites-available/            # Contains all available virtual host configurations
+│   └── myapp.conf              # Virtual host config for your Angular app
+├── sites-enabled/              # Contains enabled virtual hosts (symlinks to sites-available)
+│   └── myapp.conf -> ../sites-available/myapp.conf
+├── mods-enabled/               # Enabled Apache modules (optional, not directly related to Angular)
+└── logs/                       # Apache logs
+    ├── access.log              # Logs all requests to the server
+    └── error.log               # Logs server errors
+
+/var/www/html/                  # Default document root (or custom directory)
+└── myapp/                      # Folder for your Angular app
+    └── dist/                   # Built Angular app (output of `ng build --prod`)
+        ├── index.html          # Entry point for your Angular app
+        ├── assets/             # Static files (images, fonts, etc.)
+        ├── main.js             # Compiled JavaScript
+        ├── styles.css          # Compiled CSS
+        └── .htaccess           # Optional: URL rewriting or additional Apache directives
+
+/etc/ssl/certs/                 # SSL certificates directory (optional)
+├── myapp.crt                   # SSL certificate file
+└── myapp.key                   # Private key for the SSL certificate
+
