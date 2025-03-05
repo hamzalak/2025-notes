@@ -1,0 +1,76 @@
+import { Component } from '@angular/core';
+import { NgModule } from '@angular/core';
+import { BrowserModule } from '@angular/platform-browser';
+import { FormsModule } from '@angular/forms';
+import { QuillModule } from 'ngx-quill';
+import Quill from 'quill';
+
+
+@Component({
+  selector: 'app-root',
+  imports: [ FormsModule,QuillModule],
+  standalone:true,
+  template: `
+    <quill-editor
+      [(ngModel)]="content"
+      [modules]="quillConfig"
+      (onEditorCreated)="onEditorCreated($event)"
+    ></quill-editor>
+  `
+})
+export class AppComponent {
+  content = `
+    <table style="width:100%; border-collapse: collapse;">
+      <tr>
+        <td style="border: 1px solid black;">Row 1, Cell 1</td>
+        <td style="border: 1px solid black;">Row 1, Cell 2</td>
+      </tr>
+      <tr>
+        <td style="border: 1px solid black;">Row 2, Cell 1</td>
+        <td style="border: 1px solid black;">Row 2, Cell 2</td>
+      </tr>
+    </table>
+  `;
+
+  quillConfig = {
+    toolbar: [
+      ['bold', 'italic', 'underline', 'strike'],        // toggled buttons
+      ['blockquote', 'code-block'],
+
+      [{ 'header': 1 }, { 'header': 2 }],               // custom button values
+      [{ 'list': 'ordered'}, { 'list': 'bullet' }],
+      [{ 'script': 'sub'}, { 'script': 'super' }],      // superscript/subscript
+      [{ 'indent': '-1'}, { 'indent': '+1' }],          // outdent/indent
+      [{ 'direction': 'rtl' }],                         // text direction
+
+      [{ 'size': ['small', false, 'large', 'huge'] }],  // custom dropdown
+      [{ 'header': [1, 2, 3, 4, 5, 6, false] }],
+
+      [{ 'color': [] }, { 'background': [] }],          // dropdown with defaults
+      [{ 'font': [] }],
+      [{ 'align': [] }],
+
+      ['clean'],                                         // remove formatting button
+
+      ['link', 'image', 'video']                         // link and image, video
+    ]
+  };
+  // Reference to the Quill editor instance
+  quillEditor : Quill = null as any;
+
+  // Handler for the onEditorCreated event
+  onEditorCreated(editor: Quill) {
+    this.quillEditor = editor;
+    this.setInitialContent();
+  }
+
+  // Set initial content programmatically
+  setInitialContent() {
+    if (this.quillEditor) {
+      const delta = this.quillEditor.clipboard.convert({html:this.content});
+      this.quillEditor.setContents(delta, 'silent');
+    }
+  }
+}
+
+
