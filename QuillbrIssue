@@ -1,0 +1,106 @@
+I see the problem more clearly now. You have proper data rows in your table, but also have unwanted rows that just contain a single `<td>` with only a `<br>` inside it. Let's create a targeted solution for this specific issue:
+
+```javascript
+function cleanTableHTML(html) {
+  // Create a temporary DOM element to work with the HTML
+  const tempDiv = document.createElement('div');
+  tempDiv.innerHTML = html;
+  
+  // Find all table rows
+  const tableRows = tempDiv.querySelectorAll('tr');
+  
+  tableRows.forEach(row => {
+    // Check if this row contains only one cell with just a <br>
+    const cells = row.querySelectorAll('td, th');
+    
+    if (cells.length === 1) {
+      const cellContent = cells[0].innerHTML.trim();
+      if (cellContent === '<br>' || cellContent === '<br/>' || cellContent === '') {
+        // Remove this row
+        if (row.parentNode) {
+          row.parentNode.removeChild(row);
+        }
+      }
+    }
+  });
+  
+  return tempDiv.innerHTML;
+}
+
+// Use this before converting with clipboard
+const cleanedHTML = cleanTableHTML(mystring);
+clipboard.convert({html: cleanedHTML});
+```
+
+This solution specifically looks for rows that have exactly one cell and where that cell only contains a `<br>` tag, then removes those rows from the HTML before passing it to Quill's clipboard converter.
+
+If you're using the Quill API directly and want to handle this after conversion to Delta format:
+
+```javascript
+function removeBrOnlyRows(delta) {
+  const { Delta } = Quill.import('delta');
+  let newDelta = new Delta();
+  let skipRow = false;
+  let currentRowOps = [];
+  let cellCount = 0;
+  
+  // Process the delta operations
+  delta.ops.forEach(op => {
+    // Check for table markers
+    if (op.attributes && op.attributes.table) {
+      // Start of a row
+      if (op.attributes.table === 'row') {
+        currentRowOps = [op];
+        cellCount = 0;
+        skipRow = false;
+      }
+      // Cell content
+      else if (op.attributes.table === 'cell') {
+        cellCount++;
+        currentRowOps.push(op);
+        
+        // Check if this is a cell with just a BR
+        if (op.insert === '\n' && cellCount === 1) {
+          skipRow = true;
+        }
+      }
+      // End of row
+      else if (op.attributes.table === '/row') {
+        currentRowOps.push(op);
+        
+        // If we shouldn't skip this row, add all its ops to our delta
+        if (!skipRow) {
+          currentRowOps.forEach(rowOp => {
+            newDelta.push(rowOp);
+          });
+        }
+        
+        currentRowOps = [];
+      }
+      else {
+        currentRowOps.push(op);
+      }
+    }
+    // Non-table content
+    else if (currentRowOps.length === 0) {
+      newDelta.push(op);
+    }
+    else {
+      currentRowOps.push(op);
+    }
+  });
+  
+  return newDelta;
+}
+
+// Convert HTML to Delta first
+const delta = quill.clipboard.convert({html: mystring});
+// Then clean up the delta to remove single-cell BR rows
+const cleanedDelta = removeBrOnlyRows(delta);
+// Set the content using the cleaned Delta
+quill.setContents(cleanedDelta);
+```
+
+This second approach processes the Delta directly, looking for rows that have only one cell where that cell just contains a newline (which is how Quill represents a `<br>` in Delta format).
+
+Does one of these approaches align with your needs?
