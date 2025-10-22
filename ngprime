@@ -1,0 +1,256 @@
+ngprime :
+
+// app.component.css
+.app-container {
+  display: flex;
+  height: 100vh;
+  background: #f5f5f5;
+}
+
+.sidebar {
+  background: #2a2a2a;
+  color: white;
+  width: 60px;
+  transition: width 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sidebar.expanded {
+  width: 280px;
+}
+
+.content-studio-header {
+  padding: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border// app.module.ts
+import { NgModule } from '@angular/core';
+import { BrowserModule } from '@angular/platform-browser';
+import { BrowserAnimationsModule } from '@angular/platform-browser/animations';
+import { SidebarModule } from 'primeng/sidebar';
+import { ButtonModule } from 'primeng/button';
+import { RippleModule } from 'primeng/ripple';
+import { TooltipModule } from 'primeng/tooltip';
+
+import { AppComponent } from './app.component';
+
+@NgModule({
+  declarations: [AppComponent],
+  imports: [
+    BrowserModule,
+    BrowserAnimationsModule,
+    SidebarModule,
+    ButtonModule,
+    RippleModule,
+    TooltipModule
+  ],
+  providers: [],
+  bootstrap: [AppComponent]
+})
+export class AppModule { }
+
+// app.component.ts
+import { Component } from '@angular/core';
+
+@Component({
+  selector: 'app-root',
+  templateUrl: './app.component.html',
+  styleUrls: ['./app.component.css']
+})
+export class AppComponent {
+  sidebarExpanded = false;
+
+  menuItems = [
+    { icon: 'pi pi-book', label: 'Content Studio' },
+    { icon: 'pi pi-pencil', label: 'New Search' },
+    { icon: 'pi pi-comment', label: 'New Conversation' },
+    { icon: 'pi pi-filter', label: 'Filters' }
+  ];
+
+  toggleSidebar() {
+    this.sidebarExpanded = !this.sidebarExpanded;
+  }
+}
+
+// app.component.html
+<div class="app-container">
+  <div class="sidebar" [class.expanded]="sidebarExpanded">
+    <div class="content-studio-header">
+      <span *ngIf="sidebarExpanded">Content Studio</span>
+      <button 
+        pButton 
+        [icon]="sidebarExpanded ? 'pi pi-angle-left' : 'pi pi-angle-right'"
+        class="p-button-text p-button-rounded toggle-btn"
+        (click)="toggleSidebar()"
+        [pTooltip]="sidebarExpanded ? 'Collapse' : 'Expand'"
+        tooltipPosition="right">
+      </button>
+    </div>
+
+    <div class="menu-items">
+      <div 
+        *ngFor="let item of menuItems" 
+        class="menu-item"
+        [pTooltip]="!sidebarExpanded ? item.label : ''"
+        tooltipPosition="right">
+        <i [class]="item.icon"></i>
+        <span *ngIf="sidebarExpanded" class="menu-label">{{ item.label }}</span>
+      </div>
+    </div>
+  </div>
+
+  <div class="main-content">
+    <!-- Your main content here -->
+  </div>
+</div>
+
+// app.component.css
+.app-container {
+  display: flex;
+  height: 100vh;
+  background: #f5f5f5;
+}
+
+.sidebar {
+  background: #2a2a2a;
+  color: white;
+  width: 60px;
+  transition: width 0.3s ease;
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+}
+
+.sidebar.expanded {
+  width: 280px;
+}
+
+.content-studio-header {
+  padding: 1rem;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #3a3a3a;
+  font-weight: 500;
+}
+
+.toggle-btn {
+  margin-left: auto;
+  color: white !important;
+}
+
+.menu-items {
+  flex: 1;
+  padding: 1rem 0;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  padding: 1rem;
+  cursor: pointer;
+  transition: background 0.2s;
+  gap: 1rem;
+}
+
+.menu-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.menu-item i {
+  font-size: 1.3rem;
+  min-width: 28px;
+  text-align: center;
+}
+
+.menu-label {
+  font-size: 0.95rem;
+  white-space: nowrap;
+}
+
+.main-content {
+  flex: 1;
+  padding: 2rem;
+  overflow: auto;
+}
+
+/* Scrollbar styling */
+.sidebar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar::-webkit-scrollbar-track {
+  background: #2a2a2a;
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+  background: #555;
+  border-radius: 3px;
+}
+
+.sidebar::-webkit-scrollbar-thumb:hover {
+  background: #666;
+}-bottom: 1px solid #3a3a3a;
+  font-weight: 500;
+}
+
+.toggle-btn {
+  margin-left: auto;
+  color: white !important;
+}
+
+.menu-items {
+  flex: 1;
+  padding: 1rem 0;
+}
+
+.menu-item {
+  display: flex;
+  align-items: center;
+  padding: 1rem;
+  cursor: pointer;
+  transition: background 0.2s;
+  gap: 1rem;
+}
+
+.menu-item:hover {
+  background: rgba(255, 255, 255, 0.1);
+}
+
+.menu-item i {
+  font-size: 1.3rem;
+  min-width: 28px;
+  text-align: center;
+}
+
+.menu-label {
+  font-size: 0.95rem;
+  white-space: nowrap;
+}
+
+.main-content {
+  flex: 1;
+  padding: 2rem;
+  overflow: auto;
+}
+
+/* Scrollbar styling */
+.sidebar::-webkit-scrollbar {
+  width: 6px;
+}
+
+.sidebar::-webkit-scrollbar-track {
+  background: #2a2a2a;
+}
+
+.sidebar::-webkit-scrollbar-thumb {
+  background: #555;
+  border-radius: 3px;
+}
+
+.sidebar::-webkit-scrollbar-thumb:hover {
+  background: #666;
+}
