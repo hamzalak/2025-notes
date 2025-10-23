@@ -1,0 +1,122 @@
+// icon.types.ts
+export type IconName = 'home' | 'user' | 'settings' | 'logout';
+
+// custom-icon.component.ts
+import { Component, Input, OnInit, OnDestroy } from '@angular/core';
+import { CommonModule } from '@angular/common';
+import { HttpClient } from '@angular/common/http';
+import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
+import { Subject } from 'rxjs';
+import { takeUntil, catchError } from 'rxjs/operators';
+import { of } from 'rxjs';
+import { IconName } from './icon.types';
+
+@Component({
+  selector: 'app-icon',
+  standalone: true,
+  imports: [CommonModule],
+  template: `
+    <span 
+      [class]="'custom-icon p-icon ' + styleClass"
+      [style.fontSize.px]="size"
+      [style.color]="color"
+      [innerHTML]="sanitizedSvg">
+    </span>
+  `,
+  styles: [`
+    .custom-icon {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .custom-icon :deep(svg) {
+      width: 1em;
+      height: 1em;
+    }
+  `]
+})
+export class IconComponent implements OnInit, OnDestroy {
+  @Input() name!: IconName;
+  @Input() size: number = 16;
+  @Input() color?: string;
+  @Input() styleClass: string = '';
+
+  sanitizedSvg: SafeHtml = '';
+  private destroy$ = new Subject<void>();
+
+  constructor(
+    private http: HttpClient,
+    private sanitizer: DomSanitizer
+  ) {}
+
+  ngOnInit(): void {
+    if (this.name) {
+      this.loadIcon();
+    }
+  }
+
+  ngOnDestroy(): void {
+    this.destroy$.next();
+    this.destroy$.complete();
+  }
+
+  private loadIcon(): void {
+    this.http.get(`assets/icons/${this.name}.svg`, { responseType: 'text' })
+      .pipe(
+        takeUntil(this.destroy$),
+        catchError(error => {
+          console.error(`Failed to load icon: ${this.name}`, error);
+          return of('');
+        })
+      )
+      .subscribe(svg => {
+        this.sanitizedSvg = this.sanitizer.bypassSecurityTrustHtml(svg);
+      });
+  }
+}
+
+// app.config.ts or app.module.ts
+// Don't forget to import HttpClientModule!
+import { ApplicationConfig } from '@angular/core';
+import { provideHttpClient } from '@angular/common/http';
+
+export const appConfig: ApplicationConfig = {
+  providers: [
+    provideHttpClient(),
+    // ... other providers
+  ]
+};
+
+// Usage examples:
+/*
+<!-- Standalone -->
+<app-icon name="home" [size]="24" color="var(--primary-color)"></app-icon>
+
+<!-- In PrimeNG Button -->
+<p-button label="Dashboard">
+  <ng-template pTemplate="icon">
+    <app-icon name="home"></app-icon>
+  </ng-template>
+</p-button>
+
+<!-- In PrimeNG Card -->
+<p-card>
+  <ng-template pTemplate="header">
+    <div class="flex align-items-center gap-2 p-2">
+      <app-icon name="settings" [size]="20"></app-icon>
+      <span class="font-semibold">Settings</span>
+    </div>
+  </ng-template>
+  <p>Card content here</p>
+</p-card>
+
+<!-- In PrimeNG Menubar -->
+<p-menubar [model]="items">
+  <ng-template pTemplate="item" let-item>
+    <a class="flex align-items-center gap-2 p-menuitem-link">
+      <app-icon [name]="item.icon" [size]="18"></app-icon>
+      <span>{{ item.label }}</span>
+    </a>
+  </ng-template>
+</p-menubar>
+*/
