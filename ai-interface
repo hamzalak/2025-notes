@@ -1,0 +1,448 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AI Assistant</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+            background: linear-gradient(135deg, #f5f7fa 0%, #e8ebf0 100%);
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .header {
+            background: white;
+            padding: 16px 32px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.05);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 24px;
+        }
+
+        .nav-links a {
+            color: #333;
+            text-decoration: none;
+            font-size: 14px;
+            font-weight: 500;
+            transition: color 0.3s;
+        }
+
+        .nav-links a:hover {
+            color: #2ecc71;
+        }
+
+        .new-chat-btn {
+            background: #2ecc71;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 6px;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .new-chat-btn:hover {
+            background: #27ae60;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(46, 204, 113, 0.3);
+        }
+
+        .main-content {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px 20px;
+            max-width: 900px;
+            margin: 0 auto;
+            width: 100%;
+        }
+
+        .welcome-section {
+            text-align: center;
+            margin-bottom: 48px;
+        }
+
+        .icon-wrapper {
+            width: 80px;
+            height: 80px;
+            background: #2ecc71;
+            border-radius: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: 0 auto 24px;
+            animation: fadeInScale 0.6s ease-out;
+        }
+
+        .icon-wrapper svg {
+            width: 40px;
+            height: 40px;
+            color: white;
+        }
+
+        .welcome-section h1 {
+            font-size: 32px;
+            color: #2c3e50;
+            margin-bottom: 12px;
+            animation: fadeInUp 0.6s ease-out 0.2s backwards;
+        }
+
+        .welcome-section p {
+            color: #7f8c8d;
+            font-size: 16px;
+            animation: fadeInUp 0.6s ease-out 0.3s backwards;
+        }
+
+        .suggestions {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 16px;
+            width: 100%;
+            margin-bottom: 40px;
+        }
+
+        .suggestion-card {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            cursor: pointer;
+            transition: all 0.3s;
+            animation: fadeInUp 0.6s ease-out backwards;
+        }
+
+        .suggestion-card:nth-child(1) { animation-delay: 0.4s; }
+        .suggestion-card:nth-child(2) { animation-delay: 0.5s; }
+        .suggestion-card:nth-child(3) { animation-delay: 0.6s; }
+        .suggestion-card:nth-child(4) { animation-delay: 0.7s; }
+
+        .suggestion-card:hover {
+            transform: translateY(-4px);
+            box-shadow: 0 8px 20px rgba(0,0,0,0.1);
+        }
+
+        .suggestion-card p {
+            color: #34495e;
+            font-size: 14px;
+            line-height: 1.6;
+        }
+
+        .chat-container {
+            width: 100%;
+            max-width: 900px;
+        }
+
+        .messages {
+            margin-bottom: 20px;
+            max-height: 500px;
+            overflow-y: auto;
+        }
+
+        .message {
+            background: white;
+            padding: 20px;
+            border-radius: 12px;
+            margin-bottom: 16px;
+            box-shadow: 0 2px 8px rgba(0,0,0,0.06);
+            animation: slideIn 0.4s ease-out;
+        }
+
+        .message.user {
+            background: #e3f2fd;
+            border-left: 4px solid #2196f3;
+        }
+
+        .message.assistant {
+            border: 2px solid #2ecc71;
+        }
+
+        .input-container {
+            position: relative;
+            width: 100%;
+        }
+
+        .input-wrapper {
+            background: white;
+            border-radius: 12px;
+            box-shadow: 0 4px 16px rgba(0,0,0,0.1);
+            padding: 8px;
+            display: flex;
+            gap: 8px;
+            transition: all 0.3s;
+        }
+
+        .input-wrapper:focus-within {
+            box-shadow: 0 6px 24px rgba(46, 204, 113, 0.2);
+        }
+
+        #messageInput {
+            flex: 1;
+            border: none;
+            outline: none;
+            padding: 12px 16px;
+            font-size: 15px;
+            color: #2c3e50;
+            background: transparent;
+        }
+
+        #messageInput::placeholder {
+            color: #95a5a6;
+        }
+
+        .send-btn {
+            background: #2ecc71;
+            border: none;
+            width: 44px;
+            height: 44px;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s;
+        }
+
+        .send-btn:hover {
+            background: #27ae60;
+            transform: scale(1.05);
+        }
+
+        .send-btn:active {
+            transform: scale(0.95);
+        }
+
+        .send-btn svg {
+            width: 20px;
+            height: 20px;
+            color: white;
+        }
+
+        .typing-indicator {
+            display: none;
+            align-items: center;
+            gap: 8px;
+            padding: 16px;
+            background: white;
+            border-radius: 12px;
+            margin-bottom: 16px;
+            animation: slideIn 0.4s ease-out;
+        }
+
+        .typing-indicator.active {
+            display: flex;
+        }
+
+        .dot {
+            width: 8px;
+            height: 8px;
+            background: #2ecc71;
+            border-radius: 50%;
+            animation: typing 1.4s infinite;
+        }
+
+        .dot:nth-child(2) { animation-delay: 0.2s; }
+        .dot:nth-child(3) { animation-delay: 0.4s; }
+
+        @keyframes fadeInScale {
+            from {
+                opacity: 0;
+                transform: scale(0.8);
+            }
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        @keyframes fadeInUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(-20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes typing {
+            0%, 60%, 100% {
+                transform: translateY(0);
+                opacity: 0.4;
+            }
+            30% {
+                transform: translateY(-10px);
+                opacity: 1;
+            }
+        }
+
+        @media (max-width: 768px) {
+            .suggestions {
+                grid-template-columns: 1fr;
+            }
+            
+            .header {
+                padding: 12px 16px;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="nav-links">
+            <a href="#" id="slideSearch">Slide Search</a>
+            <a href="#" id="docSearch">Doc Search</a>
+        </div>
+        <button class="new-chat-btn">
+            <span>+</span>
+            <span>New chat</span>
+        </button>
+    </div>
+
+    <div class="main-content" id="mainContent">
+        <div class="welcome-section" id="welcomeSection">
+            <div class="icon-wrapper">
+                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 3v4M3 5h4M6 17v4m-2-2h4m5-16l2.286 6.857L21 12l-5.714 2.143L13 21l-2.286-6.857L5 12l5.714-2.143L13 3z"></path>
+                </svg>
+            </div>
+            <h1>Ready to assist you</h1>
+            <p>I'll walk you through my thinking process and I analyze<br>presentations and find insights</p>
+        </div>
+
+        <div class="suggestions" id="suggestions">
+            <div class="suggestion-card" data-text="Summarize recent M&A and ECM activity">
+                <p>Summarize recent M&A and ECM activity</p>
+            </div>
+            <div class="suggestion-card" data-text="What are the key trends in technology sector?">
+                <p>What are the key trends in technology sector?</p>
+            </div>
+            <div class="suggestion-card" data-text="Show me AMER & APAC market analysis slides">
+                <p>Show me AMER & APAC market analysis slides</p>
+            </div>
+            <div class="suggestion-card" data-text="Which clients are in North America and Canada?">
+                <p>Which clients are in North America and Canada?</p>
+            </div>
+        </div>
+
+        <div class="chat-container">
+            <div class="messages" id="messages"></div>
+            <div class="typing-indicator" id="typingIndicator">
+                <div class="dot"></div>
+                <div class="dot"></div>
+                <div class="dot"></div>
+            </div>
+            <div class="input-container">
+                <div class="input-wrapper">
+                    <input type="text" id="messageInput" placeholder="Ask me anything about your deals, markets or clients...">
+                    <button class="send-btn" id="sendBtn">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7l5 5m0 0l-5 5m5-5H6"></path>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const messageInput = document.getElementById('messageInput');
+        const sendBtn = document.getElementById('sendBtn');
+        const messages = document.getElementById('messages');
+        const typingIndicator = document.getElementById('typingIndicator');
+        const welcomeSection = document.getElementById('welcomeSection');
+        const suggestionCards = document.querySelectorAll('.suggestion-card');
+        const suggestionsContainer = document.getElementById('suggestions');
+
+        function sendMessage(text) {
+            const messageText = text || messageInput.value.trim();
+            if (!messageText) return;
+
+            // Hide welcome section and suggestions on first message
+            if (welcomeSection.style.display !== 'none') {
+                welcomeSection.style.display = 'none';
+                suggestionsContainer.style.display = 'none';
+            }
+
+            // Add user message
+            const userMessage = document.createElement('div');
+            userMessage.className = 'message user';
+            userMessage.textContent = messageText;
+            messages.appendChild(userMessage);
+
+            // Clear input
+            messageInput.value = '';
+
+            // Show typing indicator
+            typingIndicator.classList.add('active');
+
+            // Simulate assistant response
+            setTimeout(() => {
+                typingIndicator.classList.remove('active');
+                
+                const assistantMessage = document.createElement('div');
+                assistantMessage.className = 'message assistant';
+                assistantMessage.textContent = 'Lorem ipsum dolor sit amet, consectetur adipiscing elit, sed do eiusmod tempor incididunt ut labore et dolore magna aliqua. Ut enim ad minim veniam, quis nostrud exercitation ullamco laboris nisi ut aliquip ex ea commodo consequat. Duis aute irure dolor in reprehenderit in voluptate velit esse cillum dolore eu fugiat nulla pariatur. Excepteur sint occaecat cupidatat non proident, sunt in culpa qui officia deserunt mollit anim id est laborum.';
+                messages.appendChild(assistantMessage);
+
+                // Scroll to bottom
+                messages.scrollTop = messages.scrollHeight;
+            }, 2000);
+        }
+
+        sendBtn.addEventListener('click', () => sendMessage());
+        
+        messageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') {
+                sendMessage();
+            }
+        });
+
+        suggestionCards.forEach(card => {
+            card.addEventListener('click', () => {
+                const text = card.getAttribute('data-text');
+                sendMessage(text);
+            });
+        });
+
+        // New chat button
+        document.querySelector('.new-chat-btn').addEventListener('click', () => {
+            messages.innerHTML = '';
+            welcomeSection.style.display = 'block';
+            suggestionsContainer.style.display = 'grid';
+        });
+    </script>
+</body>
+</html>
