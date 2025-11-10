@@ -1,0 +1,130 @@
+package com.example.relay;
+
+import org.springframework.http.MediaType;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
+
+import java.io.BufferedReader;
+import java.io.InputStreamReader;
+import java.net.HttpURLConnection;
+import java.net.URL;
+import java.util.concurrent.ExecutorService;
+import java.util.concurrent.Executors;
+
+@RestController
+@RequestMapping("/api")
+public class SseRelayController {
+
+    private final ExecutorService executor = Executors.newCachedThreadPool();
+    
+    // Replace with your actual backend URL
+    private static final String BACKEND_URL = "http://your-backend-host:port/your-endpoint";
+
+    @GetMapping(value = "/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter relayFromBackend() {
+        SseEmitter emitter = new SseEmitter(Long.MAX_VALUE);
+        
+        executor.execute(() -> {
+            HttpURLConnection connection = null;
+            BufferedReader reader = null;
+            
+            try {
+                URL url = new URL(BACKEND_URL);
+                connection = (HttpURLConnection) url.openConnection();
+                connection.setRequestMethod("GET");
+                connection.setConnectTimeout(10000); // 10 seconds
+                connection.setReadTimeout(0); // No read timeout for streaming
+                connection.setDoInput(true);
+                
+                // Important: Don't buffer the response
+                connection.setChunkedStreamingMode(0);
+                
+                int responseCode = connection.getResponseCode();
+                System.out.println("Backend response code: " + responseCode);
+                
+                if (responseCode == 200) {
+                    reader = new BufferedReader(
+                            new InputStreamReader(connection.getInputStream(), "UTF-8"));
+                    
+                    // Send initial connection comment
+                    emitter.send(SseEmitter.event().comment("Connected to backend"));
+                    
+                    String line;
+                    int chunkCount = 0;
+                    
+                    // Read line by line as chunks arrive
+                    while ((line = reader.readLine()) != null) {
+                        chunkCount++;
+                        System.out.println("Received chunk " + chunkCount + ": " + line.substring(0, Math.min(line.length(), 50)));
+                        
+                        // Forward the chunk to client
+                        emitter.send(line);
+                    }
+                    
+                    System.out.println("Backend stream completed. Total chunks: " + chunkCount);
+                    emitter.complete();
+                } else {
+                    String error = "Backend returned error: " + responseCode;
+                    System.err.println(error);
+                    emitter.completeWithError(new RuntimeException(error));
+                }
+                
+            } catch (java.net.SocketTimeoutException e) {
+                System.err.println("Connection timeout: " + e.getMessage());
+                emitter.completeWithError(e);
+            } catch (java.io.IOException e) {
+                System.err.println("IO Error: " + e.getMessage());
+                e.printStackTrace();
+                emitter.completeWithError(e);
+            } catch (Exception e) {
+                System.err.println("Unexpected error: " + e.getMessage());
+                e.printStackTrace();
+                emitter.completeWithError(e);
+            } finally {
+                // Clean up resources
+                try {
+                    if (reader != null) reader.close();
+                    if (connection != null) connection.disconnect();
+                } catch (Exception e) {
+                    System.err.println("Error closing connection: " + e.getMessage());
+                }
+            }
+        });
+        
+        emitter.onCompletion(() -> System.out.println("Client SSE connection completed"));
+        emitter.onTimeout(() -> System.out.println("Client SSE connection timeout"));
+        emitter.onError(e -> System.err.println("Client SSE error: " + e.getMessage()));
+
+        return emitter;
+    }
+    
+    // Test endpoint with hardcoded data
+    @GetMapping(value = "/stream-test", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
+    public SseEmitter streamTest() {
+        SseEmitter emitter = new SseEmitter(Long.MAX_VALUE);
+        
+        executor.execute(() -> {
+            try {
+                emitter.send(SseEmitter.event().comment("Connection established"));
+                
+                for (int i = 1; i <= 10; i++) {
+                    String message = "Chunk " + i + ": This is message number " + i;
+                    emitter.send(message);
+                    System.out.println("Sent: " + message);
+                    Thread.sleep(1000);
+                }
+                
+                System.out.println("Stream completed successfully");
+                emitter.complete();
+                
+            } catch (Exception e) {
+                System.err.println("Error: " + e.getMessage());
+                emitter.completeWithError(e);
+            }
+        });
+
+        return emitter;
+    }
+}
