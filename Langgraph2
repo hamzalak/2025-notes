@@ -1,0 +1,396 @@
+Here's a Spring Boot service that randomly generates LangGraph data using Java Faker and other utilities:
+pom.xml dependencies:
+<dependencies>
+    <!-- Spring Boot Starter -->
+    <dependency>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter</artifactId>
+    </dependency>
+    
+    <!-- Java Faker for random data -->
+    <dependency>
+        <groupId>com.github.javafaker</groupId>
+        <artifactId>javafaker</artifactId>
+        <version>1.0.2</version>
+    </dependency>
+    
+    <!-- Jackson for JSON -->
+    <dependency>
+        <groupId>com.fasterxml.jackson.core</groupId>
+        <artifactId>jackson-databind</artifactId>
+    </dependency>
+</dependencies>
+LangGraphGeneratorService.java:
+import com.github.javafaker.Faker;
+import org.springframework.stereotype.Service;
+
+import java.util.*;
+import java.util.concurrent.ThreadLocalRandom;
+
+@Service
+public class LangGraphGeneratorService {
+    
+    private final Faker faker;
+    private final Random random;
+    
+    private static final String[] NODE_FUNCTIONS = {
+        "process_user_input", "generate_response", "execute_tools",
+        "validate_input", "format_output", "retrieve_context",
+        "analyze_sentiment", "extract_entities", "classify_intent"
+    };
+    
+    private static final String[] TOOL_NAMES = {
+        "get_weather", "search_database", "call_api",
+        "send_email", "calculate", "translate",
+        "get_current_time", "fetch_news", "query_knowledge_base"
+    };
+    
+    private static final String[] USER_QUERIES = {
+        "What's the weather like?",
+        "Can you help me with my schedule?",
+        "Tell me about the latest news",
+        "How do I solve this math problem?",
+        "What's the exchange rate for USD to EUR?",
+        "Send an email to my colleague",
+        "Translate this text to Spanish",
+        "What time is it in Tokyo?",
+        "Search for information about AI",
+        "Calculate the tip for a $50 bill"
+    };
+    
+    public LangGraphGeneratorService() {
+        this.faker = new Faker();
+        this.random = new Random();
+    }
+    
+    /**
+     * Generate a complete random LangGraph
+     */
+    public LangGraph generateRandomLangGraph() {
+        LangGraph graph = new LangGraph();
+        
+        int numberOfNodes = ThreadLocalRandom.current().nextInt(5, 12);
+        
+        // Generate nodes
+        List<Node> nodes = generateNodes(numberOfNodes);
+        graph.setNodes(nodes);
+        
+        // Generate edges based on nodes
+        List<Edge> edges = generateEdges(nodes);
+        graph.setEdges(edges);
+        
+        // Generate conversation state
+        ConversationState state = generateConversationState();
+        graph.setState(state);
+        
+        return graph;
+    }
+    
+    /**
+     * Generate random nodes
+     */
+    private List<Node> generateNodes(int count) {
+        List<Node> nodes = new ArrayList<>();
+        
+        // Always add start node
+        nodes.add(createNode("start", NodeType.START, null));
+        
+        // Add intermediate nodes
+        for (int i = 1; i < count - 1; i++) {
+            String nodeId = "node_" + faker.idNumber().valid();
+            NodeType type = i % 4 == 0 ? NodeType.CONDITIONAL : NodeType.NODE;
+            NodeData data = generateNodeData();
+            nodes.add(createNode(nodeId, type, data));
+        }
+        
+        // Always add end node
+        nodes.add(createNode("end", NodeType.END, null));
+        
+        return nodes;
+    }
+    
+    /**
+     * Create a single node
+     */
+    private Node createNode(String id, NodeType type, NodeData data) {
+        Node node = new Node();
+        node.setId(id);
+        node.setType(type);
+        node.setData(data != null ? data : new NodeData());
+        return node;
+    }
+    
+    /**
+     * Generate node data
+     */
+    private NodeData generateNodeData() {
+        NodeData data = new NodeData();
+        data.setFunction(NODE_FUNCTIONS[random.nextInt(NODE_FUNCTIONS.length)]);
+        data.setDescription(faker.lorem().sentence());
+        
+        // Random parameters
+        Map<String, Object> params = new HashMap<>();
+        int paramCount = random.nextInt(4);
+        for (int i = 0; i < paramCount; i++) {
+            String key = faker.lorem().word();
+            Object value = generateRandomValue();
+            params.put(key, value);
+        }
+        data.setParameters(params);
+        
+        return data;
+    }
+    
+    /**
+     * Generate edges connecting nodes
+     */
+    private List<Edge> generateEdges(List<Node> nodes) {
+        List<Edge> edges = new ArrayList<>();
+        
+        // Connect nodes sequentially with some branching
+        for (int i = 0; i < nodes.size() - 1; i++) {
+            Node currentNode = nodes.get(i);
+            Node nextNode = nodes.get(i + 1);
+            
+            Edge edge = new Edge();
+            edge.setSource(currentNode.getId());
+            edge.setTarget(nextNode.getId());
+            
+            // Add condition for conditional nodes
+            if (currentNode.getType() == NodeType.CONDITIONAL) {
+                edge.setCondition(generateCondition());
+            }
+            
+            // Random description
+            if (random.nextBoolean()) {
+                edge.setDescription(faker.lorem().sentence());
+            }
+            
+            edges.add(edge);
+            
+            // Sometimes add a loop back edge
+            if (i > 2 && random.nextInt(10) < 2) {
+                Edge loopEdge = new Edge();
+                loopEdge.setSource(currentNode.getId());
+                loopEdge.setTarget(nodes.get(random.nextInt(i)).getId());
+                loopEdge.setDescription("Loop back edge");
+                edges.add(loopEdge);
+            }
+        }
+        
+        return edges;
+    }
+    
+    /**
+     * Generate random condition
+     */
+    private String generateCondition() {
+        String[] conditions = {
+            "needs_tools", "no_tools_needed", "has_context",
+            "requires_validation", "is_complete", "needs_retry"
+        };
+        return conditions[random.nextInt(conditions.length)];
+    }
+    
+    /**
+     * Generate conversation state with messages
+     */
+    private ConversationState generateConversationState() {
+        ConversationState state = new ConversationState();
+        
+        // Generate messages
+        int messageCount = ThreadLocalRandom.current().nextInt(3, 10);
+        List<Message> messages = generateMessages(messageCount);
+        state.setMessages(messages);
+        
+        // Generate context
+        Map<String, Object> context = new HashMap<>();
+        context.put("session_id", faker.idNumber().valid());
+        context.put("language", faker.nation().languageCode());
+        context.put("timestamp", System.currentTimeMillis());
+        state.setContext(context);
+        
+        // Generate metadata
+        Metadata metadata = generateMetadata();
+        state.setMetadata(metadata);
+        
+        return state;
+    }
+    
+    /**
+     * Generate conversation messages
+     */
+    private List<Message> generateMessages(int count) {
+        List<Message> messages = new ArrayList<>();
+        
+        for (int i = 0; i < count; i++) {
+            Message message = new Message();
+            
+            if (i % 3 == 0) {
+                // User message
+                message.setRole("user");
+                message.setContent(USER_QUERIES[random.nextInt(USER_QUERIES.length)]);
+            } else if (i % 3 == 1) {
+                // Assistant message with possible tool calls
+                message.setRole("assistant");
+                message.setContent(faker.lorem().sentence());
+                
+                // Sometimes add tool calls
+                if (random.nextBoolean()) {
+                    List<ToolCall> toolCalls = generateToolCalls();
+                    message.setToolCalls(toolCalls);
+                }
+            } else {
+                // Tool response message
+                message.setRole("tool");
+                message.setToolCallId("call_" + faker.idNumber().valid());
+                message.setContent(generateToolResponse());
+            }
+            
+            messages.add(message);
+        }
+        
+        return messages;
+    }
+    
+    /**
+     * Generate tool calls
+     */
+    private List<ToolCall> generateToolCalls() {
+        List<ToolCall> toolCalls = new ArrayList<>();
+        int toolCount = ThreadLocalRandom.current().nextInt(1, 4);
+        
+        for (int i = 0; i < toolCount; i++) {
+            ToolCall toolCall = new ToolCall();
+            toolCall.setId("call_" + faker.idNumber().valid());
+            toolCall.setName(TOOL_NAMES[random.nextInt(TOOL_NAMES.length)]);
+            
+            Map<String, Object> args = new HashMap<>();
+            args.put("param1", faker.lorem().word());
+            args.put("param2", random.nextInt(100));
+            toolCall.setArguments(args);
+            
+            toolCalls.add(toolCall);
+        }
+        
+        return toolCalls;
+    }
+    
+    /**
+     * Generate tool response content
+     */
+    private String generateToolResponse() {
+        String[] responses = {
+            String.format("%d°F and %s", random.nextInt(100), faker.weather().description()),
+            faker.lorem().sentence(),
+            String.valueOf(random.nextDouble() * 100),
+            faker.address().fullAddress(),
+            faker.internet().url(),
+            faker.book().title()
+        };
+        return responses[random.nextInt(responses.length)];
+    }
+    
+    /**
+     * Generate metadata
+     */
+    private Metadata generateMetadata() {
+        Metadata metadata = new Metadata();
+        metadata.setConversationId("conv_" + faker.idNumber().valid());
+        metadata.setUserId("user_" + faker.idNumber().valid());
+        
+        Map<String, Object> additionalProps = new HashMap<>();
+        additionalProps.put("platform", faker.options().option("web", "mobile", "api"));
+        additionalProps.put("version", faker.app().version());
+        additionalProps.put("created_at", faker.date().birthday().getTime());
+        metadata.setAdditionalProperties(additionalProps);
+        
+        return metadata;
+    }
+    
+    /**
+     * Generate random values for parameters
+     */
+    private Object generateRandomValue() {
+        int type = random.nextInt(5);
+        switch (type) {
+            case 0: return faker.lorem().word();
+            case 1: return random.nextInt(1000);
+            case 2: return random.nextDouble();
+            case 3: return random.nextBoolean();
+            default: return faker.internet().url();
+        }
+    }
+    
+    /**
+     * Generate multiple random graphs
+     */
+    public List<LangGraph> generateMultipleGraphs(int count) {
+        List<LangGraph> graphs = new ArrayList<>();
+        for (int i = 0; i < count; i++) {
+            graphs.add(generateRandomLangGraph());
+        }
+        return graphs;
+    }
+}
+Controller to test the service:
+import com.fasterxml.jackson.databind.ObjectMapper;
+import org.springframework.beans.factory.annotation.Autowired;
+import org.springframework.web.bind.annotation.*;
+
+@RestController
+@RequestMapping("/api/langgraph")
+public class LangGraphController {
+    
+    @Autowired
+    private LangGraphGeneratorService generatorService;
+    
+    @Autowired
+    private ObjectMapper objectMapper;
+    
+    @GetMapping("/generate")
+    public LangGraph generateGraph() {
+        return generatorService.generateRandomLangGraph();
+    }
+    
+    @GetMapping("/generate/multiple")
+    public List<LangGraph> generateMultipleGraphs(
+            @RequestParam(defaultValue = "5") int count) {
+        return generatorService.generateMultipleGraphs(count);
+    }
+    
+    @GetMapping("/generate/json")
+    public String generateGraphJson() throws Exception {
+        LangGraph graph = generatorService.generateRandomLangGraph();
+        return objectMapper.writerWithDefaultPrettyPrinter()
+                          .writeValueAsString(graph);
+    }
+}
+Configuration class (optional):
+import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.databind.SerializationFeature;
+import org.springframework.context.annotation.Bean;
+import org.springframework.context.annotation.Configuration;
+
+@Configuration
+public class JacksonConfig {
+    
+    @Bean
+    public ObjectMapper objectMapper() {
+        ObjectMapper mapper = new ObjectMapper();
+        mapper.enable(SerializationFeature.INDENT_OUTPUT);
+        return mapper;
+    }
+}
+Usage:
+You can now call these endpoints:
+GET /api/langgraph/generate - Generate a single random graph
+GET /api/langgraph/generate/multiple?count=10 - Generate multiple graphs
+GET /api/langgraph/generate/json - Get the graph as formatted JSON string
+The service generates:
+Random nodes with various types (START, END, NODE, CONDITIONAL)
+Connected edges with conditions and descriptions
+Realistic conversation messages (user, assistant, tool)
+Tool calls with random arguments
+Metadata and context information
+Varied parameters and data throughout
