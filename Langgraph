@@ -1,0 +1,220 @@
+import java.util.*;
+import com.fasterxml.jackson.annotation.JsonProperty;
+
+// Main graph container
+public class LangGraph {
+    private List<Node> nodes;
+    private List<Edge> edges;
+    private ConversationState state;
+    
+    public LangGraph() {
+        this.nodes = new ArrayList<>();
+        this.edges = new ArrayList<>();
+        this.state = new ConversationState();
+    }
+    
+    // Getters and setters
+    public List<Node> getNodes() { return nodes; }
+    public void setNodes(List<Node> nodes) { this.nodes = nodes; }
+    
+    public List<Edge> getEdges() { return edges; }
+    public void setEdges(List<Edge> edges) { this.edges = edges; }
+    
+    public ConversationState getState() { return state; }
+    public void setState(ConversationState state) { this.state = state; }
+}
+
+// Node class
+class Node {
+    private String id;
+    private NodeType type;
+    private NodeData data;
+    
+    public Node() {}
+    
+    public Node(String id, NodeType type, NodeData data) {
+        this.id = id;
+        this.type = type;
+        this.data = data;
+    }
+    
+    // Getters and setters
+    public String getId() { return id; }
+    public void setId(String id) { this.id = id; }
+    
+    public NodeType getType() { return type; }
+    public void setType(NodeType type) { this.type = type; }
+    
+    public NodeData getData() { return data; }
+    public void setData(NodeData data) { this.data = data; }
+}
+
+// Node types enum
+enum NodeType {
+    START("start"),
+    END("end"),
+    NODE("node"),
+    CONDITIONAL("conditional");
+    
+    private final String value;
+    
+    NodeType(String value) {
+        this.value = value;
+    }
+    
+    public String getValue() { return value; }
+}
+
+// Node data
+class NodeData {
+    private String function;
+    private String description;
+    private Map<String, Object> parameters;
+    
+    public NodeData() {
+        this.parameters = new HashMap<>();
+    }
+    
+    // Getters and setters
+    public String getFunction() { return function; }
+    public void setFunction(String function) { this.function = function; }
+    
+    public String getDescription() { return description; }
+    public void setDescription(String description) { this.description = description; }
+    
+    public Map<String, Object> getParameters() { return parameters; }
+    public void setParameters(Map<String, Object> parameters) { this.parameters = parameters; }
+}
+
+// Edge class
+class Edge {
+    private String source;
+    private String target;
+    private String condition;
+    private String description;
+    
+    public Edge() {}
+    
+    public Edge(String source, String target) {
+        this.source = source;
+        this.target = target;
+    }
+    
+    // Getters and setters
+    public String getSource() { return source; }
+    public void setSource(String source) { this.source = source; }
+    
+    public String getTarget() { return target; }
+    public void setTarget(String target) { this.target = target; }
+    
+    public String getCondition() { return condition; }
+    public void setCondition(String condition) { this.condition = condition; }
+    
+    public String getDescription() { return description; }
+    public void setDescription(String description) { this.description = description; }
+}
+
+// Conversation state
+class ConversationState {
+    private List<Message> messages;
+    private Map<String, Object> context;
+    private Metadata metadata;
+    
+    public ConversationState() {
+        this.messages = new ArrayList<>();
+        this.context = new HashMap<>();
+        this.metadata = new Metadata();
+    }
+    
+    // Getters and setters
+    public List<Message> getMessages() { return messages; }
+    public void setMessages(List<Message> messages) { this.messages = messages; }
+    
+    public Map<String, Object> getContext() { return context; }
+    public void setContext(Map<String, Object> context) { this.context = context; }
+    
+    public Metadata getMetadata() { return metadata; }
+    public void setMetadata(Metadata metadata) { this.metadata = metadata; }
+}
+
+// Message class
+class Message {
+    private String role;
+    private String content;
+    @JsonProperty("tool_calls")
+    private List<ToolCall> toolCalls;
+    @JsonProperty("tool_call_id")
+    private String toolCallId;
+    
+    public Message() {}
+    
+    public Message(String role, String content) {
+        this.role = role;
+        this.content = content;
+    }
+    
+    // Getters and setters
+    public String getRole() { return role; }
+    public void setRole(String role) { this.role = role; }
+    
+    public String getContent() { return content; }
+    public void setContent(String content) { this.content = content; }
+    
+    public List<ToolCall> getToolCalls() { return toolCalls; }
+    public void setToolCalls(List<ToolCall> toolCalls) { this.toolCalls = toolCalls; }
+    
+    public String getToolCallId() { return toolCallId; }
+    public void setToolCallId(String toolCallId) { this.toolCallId = toolCallId; }
+}
+
+// Tool call class
+class ToolCall {
+    private String id;
+    private String name;
+    private Map<String, Object> arguments;
+    
+    public ToolCall() {
+        this.arguments = new HashMap<>();
+    }
+    
+    public ToolCall(String id, String name, Map<String, Object> arguments) {
+        this.id = id;
+        this.name = name;
+        this.arguments = arguments;
+    }
+    
+    // Getters and setters
+    public String getId() { return id; }
+    public void setId(String id) { this.id = id; }
+    
+    public String getName() { return name; }
+    public void setName(String name) { this.name = name; }
+    
+    public Map<String, Object> getArguments() { return arguments; }
+    public void setArguments(Map<String, Object> arguments) { this.arguments = arguments; }
+}
+
+// Metadata class
+class Metadata {
+    @JsonProperty("conversation_id")
+    private String conversationId;
+    @JsonProperty("user_id")
+    private String userId;
+    private Map<String, Object> additionalProperties;
+    
+    public Metadata() {
+        this.additionalProperties = new HashMap<>();
+    }
+    
+    // Getters and setters
+    public String getConversationId() { return conversationId; }
+    public void setConversationId(String conversationId) { this.conversationId = conversationId; }
+    
+    public String getUserId() { return userId; }
+    public void setUserId(String userId) { this.userId = userId; }
+    
+    public Map<String, Object> getAdditionalProperties() { return additionalProperties; }
+    public void setAdditionalProperties(Map<String, Object> additionalProperties) { 
+        this.additionalProperties = additionalProperties; 
+    }
+}
