@@ -1,0 +1,45 @@
+image-container {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 16px; /* spacing between images */
+}
+
+.image-wrapper {
+  position: relative; /* This is key - creates positioning context */
+  width: 200px; /* adjust as needed */
+}
+
+.image-wrapper img {
+  width: 100%;
+  height: auto;
+  display: block;
+}
+
+.image-number {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  background-color: rgba(0, 0, 0, 0.7);
+  color: white;
+  padding: 4px 8px;
+  border-radius: 4px;
+  font-size: 14px;
+  font-weight: bold;
+}
+And the HTML structure:
+<div class="image-container">
+  <div class="image-wrapper">
+    <img src="image1.jpg" alt="Image 1">
+    <div class="image-number">1</div>
+  </div>
+  
+  <div class="image-wrapper">
+    <img src="image2.jpg" alt="Image 2">
+    <div class="image-number">2</div>
+  </div>
+  
+  <div class="image-wrapper">
+    <img src="image3.jpg" alt="Image 3">
+    <div class="image-number">3</div>
+  </div>
+</div>
