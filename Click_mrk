@@ -1,0 +1,18 @@
+handleSpanClick(event: MouseEvent) {
+    const target = event.target as HTMLElement;
+    
+    // Check if clicked element is a span with the clickable class
+    if (target.tagName === 'SPAN' && target.classList.contains('clickable-item')) {
+      const orderId = target.getAttribute('data-order-id');
+      const documentId = target.getAttribute('data-document-id');
+      const slideId = target.getAttribute('data-slide-id');
+      
+      console.log('Clicked span with:', {
+        orderId,
+        documentId,
+        slideId
+      });
+      
+      // Now you can call your methods with these IDs
+      this.processClick(orderId, documentId, slideId);
+    }
