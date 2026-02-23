@@ -1,0 +1,121 @@
+import { inject } from '@angular/core';
+import { tapResponse } from '@ngrx/operators';
+import { patchState, signalStore, withComputed, withMethods, withState } from '@ngrx/signals';
+import { rxMethod } from '@ngrx/signals/rxjs-interop';
+import { computed } from '@angular/core';
+import { pipe, switchMap, tap } from 'rxjs';
+import { Item, ItemState } from '../models/item.model';
+import { ItemService } from '../services/item.service';
+
+const initialState: ItemState = {
+  items: [],
+  selectedItem: null,
+  loading: false,
+  error: null,
+};
+
+export const ItemStore = signalStore(
+  { providedIn: 'root' },
+
+  withState(initialState),
+
+  // ── Computed ──────────────────────────────────────────────────────────────
+  withComputed(({ items, loading, error }) => ({
+    totalItems: computed(() => items().length),
+    hasError: computed(() => !!error()),
+    isReady: computed(() => !loading() && !error()),
+  })),
+
+  // ── Methods ───────────────────────────────────────────────────────────────
+  withMethods((store, itemService = inject(ItemService)) => ({
+
+    // SELECT
+    selectItem(item: Item | null) {
+      patchState(store, { selectedItem: item });
+    },
+
+    // LOAD ALL
+    loadAll: rxMethod<void>(
+      pipe(
+        tap(() => patchState(store, { loading: true, error: null })),
+        switchMap(() =>
+          itemService.getAll().pipe(
+            tapResponse({
+              next: (items) => patchState(store, { items, loading: false }),
+              error: (error: Error) =>
+                patchState(store, { loading: false, error: error.message }),
+            })
+          )
+        )
+      )
+    ),
+
+    // CREATE
+    create: rxMethod<Omit<Item, 'id'>>(
+      pipe(
+        tap(() => patchState(store, { loading: true, error: null })),
+        switchMap((newItem) =>
+          itemService.create(newItem).pipe(
+            tapResponse({
+              next: (created) =>
+                patchState(store, {
+                  items: [...store.items(), created],
+                  loading: false,
+                }),
+              error: (error: Error) =>
+                patchState(store, { loading: false, error: error.message }),
+            })
+          )
+        )
+      )
+    ),
+
+    // UPDATE
+    update: rxMethod<{ id: number; changes: Partial<Item> }>(
+      pipe(
+        tap(() => patchState(store, { loading: true, error: null })),
+        switchMap(({ id, changes }) =>
+          itemService.update(id, changes).pipe(
+            tapResponse({
+              next: (updated) =>
+                patchState(store, {
+                  items: store.items().map((i) => (i.id === id ? updated : i)),
+                  selectedItem:
+                    store.selectedItem()?.id === id ? updated : store.selectedItem(),
+                  loading: false,
+                }),
+              error: (error: Error) =>
+                patchState(store, { loading: false, error: error.message }),
+            })
+          )
+        )
+      )
+    ),
+
+    // DELETE
+    delete: rxMethod<number>(
+      pipe(
+        tap(() => patchState(store, { loading: true, error: null })),
+        switchMap((id) =>
+          itemService.delete(id).pipe(
+            tapResponse({
+              next: () =>
+                patchState(store, {
+                  items: store.items().filter((i) => i.id !== id),
+                  selectedItem:
+                    store.selectedItem()?.id === id ? null : store.selectedItem(),
+                  loading: false,
+                }),
+              error: (error: Error) =>
+                patchState(store, { loading: false, error: error.message }),
+            })
+          )
+        )
+      )
+    ),
+
+    clearError() {
+      patchState(store, { error: null });
+    },
+  }))
+);
