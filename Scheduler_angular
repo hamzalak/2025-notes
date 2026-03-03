@@ -1,0 +1,81 @@
+// store/image.store.ts
+import { signalStore, withState, withMethods, patchState } from '@ngrx/signals';
+
+type ImageEntry = {
+  url: string;
+  expiresAt: number; // timestamp ms
+};
+
+type ImageState = {
+  images: Record<string, ImageEntry>;
+};
+
+export const ImageStore = signalStore(
+  { providedIn: 'root' },
+  withState<ImageState>({ images: {} }),
+
+  withMethods((store, imageService = inject(ImageService), scheduler = inject(ImageRefreshScheduler)) => ({
+
+    setImage(key: string, url: string) {
+      const expiresAt = getPresignedUrlExpiry(url)?.getTime() ?? 0;
+
+      patchState(store, (state) => ({
+        images: { ...state.images, [key]: { url, expiresAt } }
+      }));
+
+      scheduler.schedule(key, expiresAt, () => this.refreshImage(key));
+    },
+
+    getUrl(key: string): string | undefined {
+      return store.images()[key]?.url;
+    },
+
+    isExpired(key: string): boolean {
+      const entry = store.images()[key];
+      if (!entry) return true;
+      return Date.now() >= entry.expiresAt - 60_000;
+    },
+
+    async refreshImage(key: string) {
+      const freshUrl = await imageService.getFreshUrl(key);
+      this.setImage(key, freshUrl); // reschedules automatically
+    }
+  }))
+);
+2. The Scheduler Service
+// services/image-refresh-scheduler.service.ts
+@Injectable({ providedIn: 'root' })
+export class ImageRefreshScheduler {
+  private timers = new Map<string, ReturnType<typeof setTimeout>>();
+
+  schedule(key: string, expiresAt: number, onRefresh: () => void) {
+    this.cancel(key); // clear any existing timer
+
+    const msUntilRefresh = expiresAt - Date.now() - 60_000; // 1 min before expiry
+
+    if (msUntilRefresh <= 0) {
+      onRefresh(); // already expired or about to, refresh immediately
+      return;
+    }
+
+    const timer = setTimeout(() => {
+      this.timers.delete(key);
+      onRefresh();
+    }, msUntilRefresh);
+
+    this.timers.set(key, timer);
+  }
+
+  cancel(key: string) {
+    const timer = this.timers.get(key);
+    if (timer) {
+      clearTimeout(timer);
+      this.timers.delete(key);
+    }
+  }
+
+  cancelAll() {
+    this.timers.forEach((timer) => clearTimeout(timer));
+    this.timers.clear();
+  }
+}
