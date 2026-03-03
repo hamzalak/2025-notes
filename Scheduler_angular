@@ -74,6 +74,28 @@ export class ImageRefreshScheduler {
     }
   }
 
+
+withHooks({
+  onInit(store) {
+    const injector = inject(Injector); // ✅ capture injector here, we're still in injection context
+
+    return toObservable(store._filtersStore.selectedFilters)
+      .subscribe(() => {
+        store.loadSlides();
+        store.loadDocuments();
+
+        toObservable(store.imagesExpiryDate, { injector }).pipe( // ✅ pass injector
+          filter(date => !!date),
+          take(1)
+        ).subscribe(expiryDate => {
+          store._imagesScheduler.schedule('YY', expiryDate, () => {
+            store.loadSlides();
+            store.loadDocuments();
+          });
+        });
+      });
+  }
+
   cancelAll() {
     this.timers.forEach((timer) => clearTimeout(timer));
     this.timers.clear();
