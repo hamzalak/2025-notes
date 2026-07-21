@@ -1,0 +1,114 @@
+// form-state.service.ts
+import { Injectable, signal, computed } from '@angular/core';
+
+@Injectable() // NOT providedIn: 'root' — provided per-component/route instead
+export class FormStateService {
+  private originalValue = signal<any>(null);
+  private currentValue = signal<any>(null);
+  private saving = signal(false);
+
+  isDirty = computed(() =>
+    JSON.stringify(this.originalValue()) !== JSON.stringify(this.currentValue())
+  );
+
+  isSaving = computed(() => this.saving());
+
+  init(initial: any) {
+    this.originalValue.set(this.clone(initial));
+    this.currentValue.set(this.clone(initial));
+  }
+
+  update(value: any) {
+    this.currentValue.set(this.clone(value));
+  }
+
+  markSaved() {
+    this.originalValue.set(this.clone(this.currentValue()));
+  }
+
+  getResetValue() {
+    return this.clone(this.originalValue());
+  }
+
+  setSaving(value: boolean) {
+    this.saving.set(value);
+  }
+
+  private clone(v: any) {
+    return v ? JSON.parse(JSON.stringify(v)) : v;
+  }
+}
+
+
+// profile-form.component.ts
+import { Component, OnInit, OnDestroy, inject } from '@angular/core';
+import { FormBuilder, ReactiveFormsModule, Validators } from '@angular/forms';
+import { Subject, takeUntil } from 'rxjs';
+import { FormStateService } from './form-state.service';
+
+@Component({
+  selector: 'app-profile-form',
+  standalone: true,
+  imports: [ReactiveFormsModule],
+  providers: [FormStateService], // fresh instance per component instance
+  templateUrl: './profile-form.component.html',
+})
+export class ProfileFormComponent implements OnInit, OnDestroy {
+  private fb = inject(FormBuilder);
+  formState = inject(FormStateService); // public so template can read signals
+
+  private destroy$ = new Subject<void>();
+
+  form = this.fb.group({
+    name: ['', Validators.required],
+    email: ['', [Validators.required, Validators.email]],
+  });
+
+  ngOnInit() {
+    // Simulate loading initial data (e.g. from API)
+    const initialData = { name: 'Jane Doe', email: 'jane@example.com' };
+    this.form.patchValue(initialData);
+    this.formState.init(this.form.getRawValue());
+
+    // Keep the service in sync with every keystroke/change
+    this.form.valueChanges
+      .pipe(takeUntil(this.destroy$))
+      .subscribe((value) => this.formState.update(value));
+  }
+
+  save() {
+    if (this.form.invalid || !this.formState.isDirty()) return;
+
+    this.formState.setSaving(true);
+    // Simulate API call
+    setTimeout(() => {
+      this.formState.markSaved();
+      this.formState.setSaving(false);
+    }, 800);
+  }
+
+  discard() {
+    const resetValue = this.formState.getResetValue();
+    this.form.reset(resetValue);
+    this.formState.update(resetValue);
+  }
+
+  ngOnDestroy() {
+    this.destroy$.next();
+    this.destroy$.complete();
+  }
+}
+
+// has-unsaved-changes.guard.ts
+import { CanDeactivateFn } from '@angular/router';
+
+export interface HasUnsavedChanges {
+  formState: { isDirty: () => boolean };
+}
+
+export const hasUnsavedChangesGuard: CanDeactivateFn<HasUnsavedChanges> = (component) => {
+  if (component.formState.isDirty()) {
+    return confirm('You have unsaved changes. Leave anyway?');
+  }
+  return true;
+};
