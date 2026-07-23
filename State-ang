@@ -1,0 +1,104 @@
+import { Injectable, signal } from '@angular/core';
+import { FormGroup } from '@angular/forms';
+import isEqual from 'lodash/isEqual';
+
+@Injectable() // provided per tab/form root — NOT providedIn: 'root'
+export class FormStateService {
+  private form!: FormGroup;
+  private pendingDeps = new Set<string>();
+  private initialValue: any = null;
+
+  private readyState = signal(false);
+  private dirtyState = signal(false);
+
+  readonly ready = this.readyState.asReadonly();
+  readonly dirty = this.dirtyState.asReadonly();
+
+  init(form: FormGroup): void {
+    this.form = form;
+    form.valueChanges.subscribe(value => this.checkDirty(value));
+  }
+
+  registerDependency(depId: string): void {
+    this.pendingDeps.add(depId);
+  }
+
+  resolveDependency(depId: string): void {
+    this.pendingDeps.delete(depId);
+    if (this.pendingDeps.size === 0 && !this.readyState()) {
+      this.captureBaseline();
+    }
+  }
+
+  save(): any {
+    const value = this.form.getRawValue();
+    this.initialValue = value;
+    this.form.markAsPristine();
+    this.dirtyState.set(false);
+    return value;
+  }
+
+  private captureBaseline(): void {
+    this.initialValue = this.form.getRawValue();
+    this.readyState.set(true);
+    this.form.markAsPristine();
+    this.form.markAsUntouched();
+  }
+
+  private checkDirty(currentValue: any): void {
+    if (!this.readyState()) return;
+    this.dirtyState.set(!isEqual(currentValue, this.initialValue));
+  }
+}
+
+
+
+
+// parent
+@Component({
+  providers: [FormStateService],
+})
+export class TabBComponent implements OnInit {
+  form = this.fb.group({
+    name: [''],
+    address: this.fb.group({}), // child fills this in
+  });
+
+  constructor(private formState: FormStateService) {}
+
+  ngOnInit() {
+    this.formState.init(this.form);
+    this.formState.registerDependency('parent-http');
+    this.parentService.getData().subscribe(data => {
+      this.form.patchValue(data, { emitEvent: false });
+      this.formState.resolveDependency('parent-http');
+    });
+  }
+}
+
+
+
+// child
+@Component({
+  selector: 'app-address',
+  viewProviders: [{ provide: ControlContainer, useExisting: FormGroupDirective }],
+})
+export class AddressComponent implements OnInit {
+  // formState resolved from parent's DI scope automatically
+  constructor(
+    private formState: FormStateService,
+    private parent: FormGroupDirective,
+  ) {}
+
+  ngOnInit() {
+    const addressGroup = this.parent.form.get('address') as FormGroup;
+    addressGroup.addControl('street', new FormControl(''));
+    addressGroup.addControl('city', new FormControl(''));
+
+    this.formState.registerDependency('address-http');
+    this.addressService.getDefaults().subscribe(defaults => {
+      addressGroup.patchValue(defaults);
+      this.formState.resolveDependency('address-http');
+    });
+  }
+}
