@@ -244,3 +244,207 @@ onSave() {
     )
     .subscribe();
 }
+
+---------typing-----------
+
+import { Injectable, signal, WritableSignal, Signal } from '@angular/core';
+import { FormGroup, AbstractControl } from '@angular/forms';
+import { Observable, Subscription, tap, catchError, throwError, finalize } from 'rxjs';
+import isEqual from 'lodash/isEqual';
+
+/**
+ * Generic, reusable form-state tracker.
+ * Provide this per-component (tab root, dialog, etc.) — NOT in root —
+ * so each form instance gets its own isolated state.
+ *
+ * T = the shape of the form's value (i.e. the type returned by form.getRawValue()).
+ */
+@Injectable()
+export class FormStateService<T extends Record<string, unknown>> {
+  private form: FormGroup<{ [K in keyof T]: AbstractControl<T[K]> }> | null = null;
+  private valueChangesSub: Subscription | null = null;
+
+  private pendingDeps = new Set<string>();
+  private initialValue: T | null = null;
+
+  private readonly readyState: WritableSignal<boolean> = signal(false);
+  private readonly dirtyState: WritableSignal<boolean> = signal(false);
+  private readonly savingState: WritableSignal<boolean> = signal(false);
+
+  readonly ready: Signal<boolean> = this.readyState.asReadonly();
+  readonly dirty: Signal<boolean> = this.dirtyState.asReadonly();
+  readonly saving: Signal<boolean> = this.savingState.asReadonly();
+
+  /**
+   * Bind the service to a form. Call once, typically in ngOnInit of the
+   * component that owns the FormGroup.
+   */
+  init(form: FormGroup<{ [K in keyof T]: AbstractControl<T[K]> }>): void {
+    this.form = form;
+    this.valueChangesSub?.unsubscribe();
+    this.valueChangesSub = form.valueChanges.subscribe(value =>
+      this.checkDirty(value as T),
+    );
+  }
+
+  /**
+   * Register an async dependency (an HTTP call, a resolver, etc.) that must
+   * complete before the form's initial baseline can be captured.
+   * depId just needs to be unique per caller, e.g. 'parent-http', 'address-http'.
+   */
+  registerDependency(depId: string): void {
+    this.pendingDeps.add(depId);
+  }
+
+  /**
+   * Mark a previously registered dependency as resolved. Once all registered
+   * dependencies are resolved, the baseline is captured automatically.
+   */
+  resolveDependency(depId: string): void {
+    this.pendingDeps.delete(depId);
+    if (this.pendingDeps.size === 0 && !this.readyState()) {
+      this.captureBaseline();
+    }
+  }
+
+  /**
+   * Generic save: caller supplies the Observable that performs the actual
+   * HTTP request (or any async operation), using whatever service it has
+   * available. This service has no knowledge of HttpClient or endpoints.
+   *
+   * @param request$ the Observable to execute (e.g. this.userService.update(value))
+   * @param mapResponseToFormValue optional — if the API response should become
+   *   the new baseline (e.g. server assigns an id/timestamp), provide a mapper
+   *   from the response type R to the form's value type T. If omitted, the
+   *   current form value is used as the new baseline.
+   */
+  save<R>(
+    request$: Observable<R>,
+    mapResponseToFormValue?: (response: R) => T,
+  ): Observable<R> {
+    if (!this.form) {
+      return throwError(() => new Error('FormStateService.save() called before init().'));
+    }
+
+    this.savingState.set(true);
+
+    return request$.pipe(
+      tap(response => {
+        const newBaseline: T = mapResponseToFormValue
+          ? mapResponseToFormValue(response)
+          : (this.form!.getRawValue() as T);
+
+        this.initialValue = newBaseline;
+
+        if (mapResponseToFormValue) {
+          this.form!.patchValue(newBaseline as Partial<T>, { emitEvent: false });
+        }
+
+        this.form!.markAsPristine();
+        this.dirtyState.set(false);
+      }),
+      catchError((err: unknown) => throwError(() => err)),
+      finalize(() => this.savingState.set(false)),
+    );
+  }
+
+  /**
+   * Reset the form to the last captured baseline (initial API load, or the
+   * most recent successful save — see class notes below).
+   */
+  discard(): void {
+    if (!this.form || !this.readyState() || this.initialValue === null) return;
+    this.form.reset(this.initialValue as Partial<T>);
+    this.form.markAsPristine();
+    this.form.markAsUntouched();
+    this.dirtyState.set(false);
+  }
+
+  getCurrentValue(): T | null {
+    return this.form ? (this.form.getRawValue() as T) : null;
+  }
+
+  getInitialValue(): T | null {
+    return this.initialValue;
+  }
+
+  /** Call from ngOnDestroy of the owning component to avoid leaking the subscription. */
+  destroy(): void {
+    this.valueChangesSub?.unsubscribe();
+    this.valueChangesSub = null;
+  }
+
+  private captureBaseline(): void {
+    if (!this.form) return;
+    this.initialValue = this.form.getRawValue() as T;
+    this.readyState.set(true);
+    this.form.markAsPristine();
+    this.form.markAsUntouched();
+  }
+
+  private checkDirty(currentValue: T): void {
+    if (!this.readyState() || this.initialValue === null) return;
+    this.dirtyState.set(!isEqual(currentValue, this.initialValue));
+  }
+}
+
+
+-------usage--------
+
+interface UserFormValue {
+  name: string;
+  email: string;
+  address: {
+    street: string;
+    city: string;
+  };
+}
+
+@Component({
+  providers: [FormStateService<UserFormValue>], // note: see caveat below
+})
+export class UserTabComponent implements OnInit, OnDestroy {
+  form = this.fb.group({
+    name: this.fb.control('', { nonNullable: true }),
+    email: this.fb.control('', { nonNullable: true }),
+    address: this.fb.group({
+      street: this.fb.control('', { nonNullable: true }),
+      city: this.fb.control('', { nonNullable: true }),
+    }),
+  });
+
+  constructor(
+    private fb: FormBuilder,
+    private formState: FormStateService<UserFormValue>,
+    private userService: UserService,
+  ) {}
+
+  ngOnInit() {
+    this.formState.init(this.form);
+    this.formState.registerDependency('user-http');
+
+    this.userService.getUser().subscribe(user => {
+      this.form.patchValue(user);
+      this.formState.resolveDependency('user-http');
+    });
+  }
+
+  onSave() {
+    const value = this.formState.getCurrentValue();
+    if (!value) return;
+
+    this.formState
+      .save<UserFormValue>(this.userService.updateUser(value))
+      .subscribe({
+        error: () => this.toast.error('Save failed'),
+      });
+  }
+
+  onDiscard() {
+    this.formState.discard();
+  }
+
+  ngOnDestroy() {
+    this.formState.destroy();
+  }
+}
