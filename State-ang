@@ -448,3 +448,142 @@ export class UserTabComponent implements OnInit, OnDestroy {
     this.formState.destroy();
   }
 }
+......,.....
+
+
+import { Injectable, signal, WritableSignal, Signal } from '@angular/core';
+import { FormGroup } from '@angular/forms';
+import { Observable, Subscription, tap, catchError, throwError, finalize } from 'rxjs';
+import isEqual from 'lodash/isEqual';
+
+/**
+ * Generic, reusable form-state tracker.
+ * Provide this per-component (tab root, dialog, etc.) — NOT in root —
+ * so each form instance gets its own isolated state.
+ *
+ * T = the shape of the form's value (i.e. what form.getRawValue() returns).
+ *
+ * Note: internally the FormGroup is stored loosely (FormGroup<any>) because
+ * Angular's typed-forms internals (ɵFormGroupValue etc.) can't be resolved
+ * generically against an arbitrary T — see usage notes below. All *public*
+ * methods on this service are still fully typed in T.
+ */
+@Injectable()
+export class FormStateService<T extends Record<string, unknown>> {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  private form: FormGroup<any> | null = null;
+  private valueChangesSub: Subscription | null = null;
+
+  private pendingDeps = new Set<string>();
+  private initialValue: T | null = null;
+
+  private readonly readyState: WritableSignal<boolean> = signal(false);
+  private readonly dirtyState: WritableSignal<boolean> = signal(false);
+  private readonly savingState: WritableSignal<boolean> = signal(false);
+
+  readonly ready: Signal<boolean> = this.readyState.asReadonly();
+  readonly dirty: Signal<boolean> = this.dirtyState.asReadonly();
+  readonly saving: Signal<boolean> = this.savingState.asReadonly();
+
+  /**
+   * Bind the service to a form. Call once, typically in ngOnInit of the
+   * component that owns the FormGroup.
+   *
+   * The parameter is typed as FormGroup<any> deliberately (see class notes) —
+   * pass your concrete, fully-typed FormGroup here; the cast is internal to
+   * this method only.
+   */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  init(form: FormGroup<any>): void {
+    this.form = form;
+    this.valueChangesSub?.unsubscribe();
+    this.valueChangesSub = form.valueChanges.subscribe(value =>
+      this.checkDirty(value as T),
+    );
+  }
+
+  registerDependency(depId: string): void {
+    this.pendingDeps.add(depId);
+  }
+
+  resolveDependency(depId: string): void {
+    this.pendingDeps.delete(depId);
+    if (this.pendingDeps.size === 0 && !this.readyState()) {
+      this.captureBaseline();
+    }
+  }
+
+  /**
+   * Generic save: caller supplies the Observable that performs the actual
+   * HTTP request (or any async operation) using whatever service it has.
+   * This service has no knowledge of HttpClient or endpoints.
+   */
+  save<R>(
+    request$: Observable<R>,
+    mapResponseToFormValue?: (response: R) => T,
+  ): Observable<R> {
+    if (!this.form) {
+      return throwError(() => new Error('FormStateService.save() called before init().'));
+    }
+
+    this.savingState.set(true);
+
+    return request$.pipe(
+      tap(response => {
+        const newBaseline: T = mapResponseToFormValue
+          ? mapResponseToFormValue(response)
+          : (this.form!.getRawValue() as T);
+
+        this.initialValue = newBaseline;
+
+        if (mapResponseToFormValue) {
+          this.form!.patchValue(newBaseline, { emitEvent: false });
+        }
+
+        this.form!.markAsPristine();
+        this.dirtyState.set(false);
+      }),
+      catchError((err: unknown) => throwError(() => err)),
+      finalize(() => this.savingState.set(false)),
+    );
+  }
+
+  /**
+   * Reset the form to the last captured baseline (initial API load, or the
+   * most recent successful save).
+   */
+  discard(): void {
+    if (!this.form || !this.readyState() || this.initialValue === null) return;
+    this.form.reset(this.initialValue);
+    this.form.markAsPristine();
+    this.form.markAsUntouched();
+    this.dirtyState.set(false);
+  }
+
+  getCurrentValue(): T | null {
+    return this.form ? (this.form.getRawValue() as T) : null;
+  }
+
+  getInitialValue(): T | null {
+    return this.initialValue;
+  }
+
+  /** Call from ngOnDestroy of the owning component to avoid leaking the subscription. */
+  destroy(): void {
+    this.valueChangesSub?.unsubscribe();
+    this.valueChangesSub = null;
+  }
+
+  private captureBaseline(): void {
+    if (!this.form) return;
+    this.initialValue = this.form.getRawValue() as T;
+    this.readyState.set(true);
+    this.form.markAsPristine();
+    this.form.markAsUntouched();
+  }
+
+  private checkDirty(currentValue: T): void {
+    if (!this.readyState() || this.initialValue === null) return;
+    this.dirtyState.set(!isEqual(currentValue, this.initialValue));
+  }
+}
