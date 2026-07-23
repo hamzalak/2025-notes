@@ -102,3 +102,145 @@ export class AddressComponent implements OnInit {
     });
   }
 }
+/// save discard 
+
+import { Injectable, signal } from '@angular/core';
+import { FormGroup } from '@angular/forms';
+import { Observable, tap, catchError, throwError, finalize } from 'rxjs';
+import isEqual from 'lodash/isEqual';
+
+@Injectable() // provided per tab/form root
+export class FormStateService {
+  private form!: FormGroup;
+  private pendingDeps = new Set<string>();
+  private initialValue: any = null;
+
+  private readyState = signal(false);
+  private dirtyState = signal(false);
+  private savingState = signal(false);
+
+  readonly ready = this.readyState.asReadonly();
+  readonly dirty = this.dirtyState.asReadonly();
+  readonly saving = this.savingState.asReadonly();
+
+  init(form: FormGroup): void {
+    this.form = form;
+    form.valueChanges.subscribe(value => this.checkDirty(value));
+  }
+
+  registerDependency(depId: string): void {
+    this.pendingDeps.add(depId);
+  }
+
+  resolveDependency(depId: string): void {
+    this.pendingDeps.delete(depId);
+    if (this.pendingDeps.size === 0 && !this.readyState()) {
+      this.captureBaseline();
+    }
+  }
+
+  /**
+   * Generic save: caller supplies the actual HTTP call (any service, any shape).
+   * The service just needs to know: here's the request, here's what to do
+   * with the form once it succeeds.
+   *
+   * @param request$  the Observable returned by the caller's http service,
+   *                   e.g. () => this.userService.update(this.formState.getCurrentValue())
+   * @param mapResponseToFormValue  optional — if the API returns the saved entity
+   *   and you want the form to re-baseline against the *server's* version
+   *   (e.g. server adds an id, timestamps, normalizes fields) rather than
+   *   just the raw form value you sent.
+   */
+  save<T>(
+    request$: Observable<T>,
+    mapResponseToFormValue?: (response: T) => any,
+  ): Observable<T> {
+    this.savingState.set(true);
+
+    return request$.pipe(
+      tap(response => {
+        const newBaseline = mapResponseToFormValue
+          ? mapResponseToFormValue(response)
+          : this.form.getRawValue();
+
+        this.initialValue = newBaseline;
+
+        if (mapResponseToFormValue) {
+          this.form.patchValue(newBaseline, { emitEvent: false });
+        }
+
+        this.form.markAsPristine();
+        this.dirtyState.set(false);
+      }),
+      catchError(err => {
+        // don't touch initialValue/dirty state on failure — form stays dirty,
+        // user's unsaved changes are preserved
+        return throwError(() => err);
+      }),
+      finalize(() => this.savingState.set(false)),
+    );
+  }
+
+  /**
+   * Reset the form back to the very first value fetched from the API
+   * (i.e. the state captured right after captureBaseline() ran the first time).
+   */
+  discard(): void {
+    if (!this.readyState()) return; // nothing to discard yet, still loading
+    this.form.reset(this.initialValue);
+    this.form.markAsPristine();
+    this.form.markAsUntouched();
+    this.dirtyState.set(false);
+  }
+
+  getCurrentValue(): any {
+    return this.form?.getRawValue();
+  }
+
+  getInitialValue(): any {
+    return this.initialValue;
+  }
+
+  private captureBaseline(): void {
+    this.initialValue = this.form.getRawValue();
+    this.readyState.set(true);
+    this.form.markAsPristine();
+    this.form.markAsUntouched();
+  }
+
+  private checkDirty(currentValue: any): void {
+    if (!this.readyState()) return;
+    this.dirtyState.set(!isEqual(currentValue, this.initialValue));
+  }
+}
+
+//usage
+
+constructor(
+  private formState: FormStateService,
+  private userService: UserService, // could be any service, any shape
+) {}
+
+onSave() {
+  this.formState
+    .save(this.userService.updateUser(this.formState.getCurrentValue()))
+    .subscribe({
+      next: () => this.toast.success('Saved'),
+      error: () => this.toast.error('Save failed'),
+    });
+}
+
+onDiscard() {
+  this.formState.discard();
+}
+
+// 
+
+onSave() {
+  this.formState
+    .save(
+      this.userService.updateUser(this.formState.getCurrentValue()),
+      (response) => response.user, // shape the API returns into the form's shape
+    )
+    .subscribe();
+}
