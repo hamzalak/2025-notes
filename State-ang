@@ -587,3 +587,162 @@ export class FormStateService<T extends Record<string, unknown>> {
     this.dirtyState.set(!isEqual(currentValue, this.initialValue));
   }
 }
+
+---------- Array -----
+
+import { Injectable, signal, WritableSignal, Signal, computed } from '@angular/core';
+import { FormGroup } from '@angular/forms';
+import { Observable, Subscription, tap, catchError, throwError, finalize } from 'rxjs';
+import isEqual from 'lodash/isEqual';
+
+interface RegisteredForm {
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  form: FormGroup<any>;
+  initialValue: unknown;
+  sub: Subscription;
+}
+
+/**
+ * Aggregates multiple independent FormGroups (each with its own <form>)
+ * under one shared readiness/dirty/save/discard state.
+ * Provide per parent scope (tab, dialog, etc.) — not in root.
+ */
+@Injectable()
+export class FormStateService {
+  private forms = new Map<string, RegisteredForm>();
+  private pendingDeps = new Set<string>();
+
+  private readonly readyState: WritableSignal<boolean> = signal(false);
+  private readonly dirtyKeys: WritableSignal<Set<string>> = signal(new Set());
+  private readonly savingState: WritableSignal<boolean> = signal(false);
+
+  readonly ready: Signal<boolean> = this.readyState.asReadonly();
+  readonly saving: Signal<boolean> = this.savingState.asReadonly();
+  readonly dirty: Signal<boolean> = computed(() => this.dirtyKeys().size > 0);
+
+  /** Each child calls this once with a unique key and its own FormGroup. */
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  registerForm(key: string, form: FormGroup<any>): void {
+    const sub = form.valueChanges.subscribe(value => this.checkDirty(key, value));
+    this.forms.set(key, { form, initialValue: null, sub });
+  }
+
+  unregisterForm(key: string): void {
+    this.forms.get(key)?.sub.unsubscribe();
+    this.forms.delete(key);
+    this.dirtyKeys.update(set => {
+      const next = new Set(set);
+      next.delete(key);
+      return next;
+    });
+  }
+
+  registerDependency(depId: string): void {
+    this.pendingDeps.add(depId);
+  }
+
+  resolveDependency(depId: string): void {
+    this.pendingDeps.delete(depId);
+    if (this.pendingDeps.size === 0 && !this.readyState()) {
+      this.captureBaseline();
+    }
+  }
+
+  /** Combined value across all registered forms, keyed the same way they were registered. */
+  getCurrentValue(): Record<string, unknown> {
+    const result: Record<string, unknown> = {};
+    this.forms.forEach((entry, key) => {
+      result[key] = entry.form.getRawValue();
+    });
+    return result;
+  }
+
+  getInitialValue(): Record<string, unknown> {
+    const result: Record<string, unknown> = {};
+    this.forms.forEach((entry, key) => {
+      result[key] = entry.initialValue;
+    });
+    return result;
+  }
+
+  /** Caller supplies the save Observable (single combined call, or forkJoin of several). */
+  save<R>(request$: Observable<R>, onSuccess?: (response: R) => void): Observable<R> {
+    this.savingState.set(true);
+
+    return request$.pipe(
+      tap(response => {
+        this.forms.forEach(entry => {
+          entry.initialValue = entry.form.getRawValue();
+          entry.form.markAsPristine();
+        });
+        this.dirtyKeys.set(new Set());
+        onSuccess?.(response);
+      }),
+      catchError((err: unknown) => throwError(() => err)),
+      finalize(() => this.savingState.set(false)),
+    );
+  }
+
+  /** Resets every registered form back to its own last captured baseline. */
+  discard(): void {
+    if (!this.readyState()) return;
+    this.forms.forEach(entry => {
+      entry.form.reset(entry.initialValue);
+      entry.form.markAsPristine();
+      entry.form.markAsUntouched();
+    });
+    this.dirtyKeys.set(new Set());
+  }
+
+  private captureBaseline(): void {
+    this.forms.forEach(entry => {
+      entry.initialValue = entry.form.getRawValue();
+      entry.form.markAsPristine();
+      entry.form.markAsUntouched();
+    });
+    this.readyState.set(true);
+  }
+
+  private checkDirty(key: string, currentValue: unknown): void {
+    if (!this.readyState()) return;
+    const entry = this.forms.get(key);
+    if (!entry) return;
+
+    this.dirtyKeys.update(set => {
+      const next = new Set(set);
+      isEqual(currentValue, entry.initialValue) ? next.delete(key) : next.add(key);
+      return next;
+    });
+  }
+}
+
+---- Child ----
+
+constructor(private formState: FormStateService) {}
+
+ngOnInit() {
+  this.formState.registerForm('address', this.form);
+  this.formState.registerDependency('address-http');
+
+  this.addressService.getDefaults().subscribe(defaults => {
+    this.form.patchValue(defaults);
+    this.formState.resolveDependency('address-http');
+  });
+}
+
+ngOnDestroy() {
+  this.formState.unregisterForm('address');
+}
+
+
+---- parent -----
+constructor(private formState: FormStateService) {}
+
+onSave() {
+  const payload = this.formState.getCurrentValue(); // { address: {...}, billing: {...} }
+  this.formState.save(this.api.saveAll(payload)).subscribe();
+}
+
+onDiscard() {
+  this.formState.discard();
+}
